@@ -1,2 +1,2 @@
-# birdseye
+# Commentator Buddy
 Football Commentator Interface
