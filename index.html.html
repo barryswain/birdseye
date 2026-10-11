@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match Commentary Assistant</title>
+    <style>
+        :root {
+            --pitch-color: #2e8b57;
+            --pitch-stripe: #267a4d;
+            --line-color: white;
+            --bg-color: #f0f0f0;
+            --sidebar-bg: #e0e0e0;
+            --home-color: #0000ff;
+            --home-text: #ffffff;
+            --home-gk: #ffff00;
+            --away-color: #ff0000;
+            --away-text: #ffffff;
+            --away-gk: #00ff00;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Aptos', sans-serif;
+            font-weight: bold;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            font-size: 12px;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 5px;
+            background-color: #333;
+            color: white;
+            flex-shrink: 0;
+        }
+        .logo { font-size: 1.5em; font-weight: bold; }
+        .logo .football { color: #90ee90; }
+        .logo .live { color: #ffb6c1; }
+        .subheader { font-size: 0.9em; color: #ccc; }
+        
+        .top-controls {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 20px;
+            background: #ddd;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .top-controls input { font-size: 1em; padding: 2px; }
+        .top-controls button { padding: 4px 10px; cursor: pointer; font-weight: bold; }
+
+        /* Main Content */
+        .main-container {
+            display: flex;
+            flex-grow: 1;
+            overflow: visible;
+            padding: 5px;
+            gap: 5px;
+        }
+
+        /* Sidebars */
+        .sidebar {
+            width: 200px;
+            background: var(--sidebar-bg);
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .sidebar h2 { font-size: 1.2em; text-align: center; border-bottom: 1px solid #999; padding-bottom: 2px; }
+        .editable-team-name { font-size: 1.2em; font-weight: bold; text-align: center; border: 1px dashed #999; padding: 2px; cursor: text; user-select: text;}
+        
+        .field-group { display: flex; flex-direction: column; }
+        .field-group label { font-size: 0.8em; font-weight: bold; color: #555; }
+        .field-group input, .field-group textarea, .field-group div[contenteditable] { 
+            border: 1px solid #ccc; padding: 2px; font-size: 0.9em; user-select: text; background: white;
+        }
+        .field-group div[contenteditable] { min-height: 40px; }
+        .goalscorers { font-size: 1.1em; font-weight: bold; min-height: 60px !important; }
+        
+        .color-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; font-size: 0.8em; margin-top: auto;}
+        .color-pickers label { display: flex; flex-direction: column; align-items: center; }
+        .color-pickers input[type="color"] { width: 100%; height: 20px; padding: 0; border: none; }
+
+        .officials-section { border-top: 2px solid #999; padding-top: 5px; margin-top: 5px; font-size: 0.9em;}
+        .officials-section .field-group { flex-direction: row; align-items: center; justify-content: space-between; }
+        .officials-section input { width: 100px; }
+
+        /* Pitch Area */
+        .pitch-container {
+            flex-grow: 1;
+            position: relative;
+            background: repeating-linear-gradient(90deg, var(--pitch-color) 0%, var(--pitch-color) 10%, var(--pitch-stripe) 10%, var(--pitch-stripe) 20%);
+            border: 2px solid var(--line-color);
+            margin: 0 5px;
+            overflow: visible;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pitch {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        /* Pitch Markings */
+        .pitch-line { position: absolute; border: 2px solid var(--line-color); pointer-events: none;}
+        .center-line { position: absolute; top: 0; bottom: 0; left: 50%; border-left: 2px solid var(--line-color); transform: translateX(-50%); pointer-events: none;}
+        .center-circle { top: 50%; left: 50%; width: 100px; height: 100px; border-radius: 50%; transform: translate(-50%, -50%); }
+        .center-spot { top: 50%; left: 50%; width: 4px; height: 4px; background: var(--line-color); border-radius: 50%; transform: translate(-50%, -50%); }
+        .pen-box-left { top: 20%; left: 0; width: 15%; bottom: 20%; border-left: none; }
+        .6yd-box-left { top: 35%; left: 0; width: 5%; bottom: 35%; border-left: none; }
+        .pen-box-right { top: 20%; right: 0; width: 15%; bottom: 20%; border-right: none; }
+        .6yd-box-right { top: 35%; right: 0; width: 5%; bottom: 35%; border-right: none; }
+
+        /* Substitutes Area */
+        .subs-area {
+            min-height: 135px;
+            background: #ccc;
+            display: flex;
+            border-top: 2px solid #999;
+            flex-shrink: 0;
+            padding: 5px;
+            gap: 10px;
+            overflow-x: auto;
+        }
+        .subs-half {
+            flex: 1;
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            align-content: flex-start;
+            gap: 5px;
+            padding: 5px;
+            border: 1px solid #aaa;
+            background: #eee;
+            position: relative;
+        }
+        .subs-half::before {
+            content: attr(data-team) ' Subs';
+            position: absolute;
+            top: 2px;
+            left: 5px;
+            font-size: 0.8em;
+            color: #888;
+            pointer-events: none;
+        }
+
+        /* Player Boxes */
+        .player {
+            position: absolute;
+            width: 130px;
+            min-height: 112px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            cursor: grab;
+            padding: 2px;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+            z-index: 10;
+            transform: translate(-50%, -50%); /* Center on anchor point */
+            flex-shrink: 0;
+        }
+        .player:active { cursor: grabbing; z-index: 100; }
+        .player.on-pitch { border: 2px solid black; opacity: 1; }
+        .player.off-pitch { border: 1px solid #666; opacity: 0.6; }
+        
+        .player-num { font-weight: bold; font-size: 2.4em; pointer-events: none;}
+        .player-name { 
+            font-size: 1.8em; 
+            text-align: center; 
+            word-wrap: break-word; 
+            width: 100%;
+            pointer-events: none;
+        }
+        
+        /* Edit mode for player */
+        .player-edit {
+            display: none;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top:0; left:0;
+            background: rgba(255,255,255,0.9);
+            z-index: 20;
+        }
+        .player.editing .player-edit { display: flex; }
+        .player.editing .player-num, .player.editing .player-name { visibility: hidden; }
+        .player-edit input { width: 100%; font-size: 0.9em; text-align: center; border: 1px solid #ccc; padding: 1px;}
+        .player-edit button { font-size: 0.8em; cursor: pointer; }
+
+        /* Notes */
+        .note {
+            position: absolute;
+            width: 110px;
+            min-height: 110px;
+            background: #ffeb3b;
+            border: 1px solid #cddc39;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            cursor: grab;
+            z-index: 50;
+        }
+        .note:active { cursor: grabbing; z-index: 100; }
+        .note-header { font-weight: bold; font-size: 1em; text-align: center; pointer-events: none;}
+        .note-content { 
+            flex-grow: 1; 
+            background: transparent; 
+            border: none; 
+            resize: none; 
+            font-size: 1.1em; 
+            font-family: inherit;
+            outline: none;
+        }
+
+        /* Import Instructions */
+        .import-instructions {
+            margin-top: 10px;
+            font-size: 0.85em;
+            background: white;
+            border: 1px solid #ccc;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .import-instructions summary {
+            cursor: pointer;
+            outline: none;
+            text-align: center;
+        }
+        .import-instructions pre {
+            margin-top: 5px;
+            white-space: pre-wrap;
+            font-family: inherit;
+            font-size: 0.9em;
+            overflow-x: auto;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.open {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .modal-content h2 { text-align: center; font-size: 1.5em; }
+        #import-text {
+            width: 100%;
+            height: 300px;
+            font-family: 'Aptos', sans-serif;
+            font-weight: bold;
+            font-size: 1em;
+            padding: 10px;
+            resize: vertical;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: space-around;
+            padding-top: 10px;
+        }
+        .modal-buttons button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo"><span class="football">Football</span> <span class="live">Live</span></div>
+        <div class="subheader">Match commentary Assistant</div>
+    </header>
+
+    <div class="top-controls">
+        <div>
+            <input type="text" placeholder="Competition/Cup" style="width: 150px;">
+            <input type="text" placeholder="Stadium" style="width: 150px;">
+        </div>
+        <div>
+            <button onclick="openImportModal()" style="margin-right: 15px; background: #90ee90; border:1px solid #267a4d;">Import Squads</button>
+            <label>Home Form:</label>
+            <select id="home-formation" onchange="updateFormation('home', this.value)">
+                <option value="4-3-3">4-3-3</option>
+                <option value="4-4-2">4-4-2</option>
+                <option value="4-5-1">4-5-1</option>
+            </select>
+            <button onclick="swapEnds()">Swap Ends</button>
+            <label>Away Form:</label>
+            <select id="away-formation" onchange="updateFormation('away', this.value)">
+                <option value="4-3-3">4-3-3</option>
+                <option value="4-4-2">4-4-2</option>
+                <option value="4-5-1">4-5-1</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Home Sidebar -->
+        <div class="sidebar" id="home-sidebar">
+            <div class="editable-team-name" contenteditable="true">HOME TEAM</div>
+            
+            <div class="field-group"><label>Head Coach</label><input type="text"></div>
+            <div class="field-group"><label>Asst Coach</label><input type="text"></div>
+            <div class="field-group"><label>Physio</label><input type="text"></div>
+            
+            <div class="field-group"><label>Yellow Cards</label><div contenteditable="true"></div></div>
+            <div class="field-group"><label>Red Cards</label><div contenteditable="true"></div></div>
+            <div class="field-group"><label>Goalscorers</label><div contenteditable="true" class="goalscorers"></div></div>
+
+            <div class="color-pickers">
+                <label>Box <input type="color" id="home-box-color" value="#0000ff"></label>
+                <label>Text <input type="color" id="home-text-color" value="#ffffff"></label>
+                <label>GK Box <input type="color" id="home-gk-color" value="#ffff00"></label>
+            </div>
+            
+            <details class="import-instructions">
+                <summary>Import instructions</summary>
+                <button id="copy-template-btn" onclick="copyTemplate()" style="margin-top: 5px; margin-bottom: 5px; width: 100%; padding: 4px; background: #ddd; border: 1px solid #999; cursor: pointer; border-radius: 3px;">Copy Template</button>
+<pre id="template-text">1 GOALKEEPER
+2 RIGHT FULL BACK
+3 CENTRE BACK
+4 CENTRE BACK
+5 LEFT FULL BACK
+6 CENTRE MIDFIELDER
+7 CENTRE MIDFIELDER
+8 CENTRE MIDFIELDER
+9 RIGHT WING
+10 CENTRE FORWARD
+11 LEFT WING
+12 SUB
+13 SUB
+14 SUB
+15 SUB
+16 SUB
+17 SUB
+18 SUB
+19 SUB
+20 SUB
+1 GOALKEEPER
+2 RIGHT FULL BACK
+3 CENTRE BACK
+4 CENTRE BACK
+5 LEFT FULL BACK
+6 CENTRE MIDFIELDER
+7 CENTRE MIDFIELDER
+8 CENTRE MIDFIELDER
+9 RIGHT WING
+10 CENTRE FORWARD
+11 LEFT WING
+12 SUB
+13 SUB
+14 SUB
+15 SUB
+16 SUB
+17 SUB
+18 SUB
+19 SUB
+20 SUB</pre>
+            </details>
+        </div>
+
+        <!-- Pitch -->
+        <div class="pitch-container">
+            <div class="pitch" id="pitch">
+                <div class="center-line"></div>
+                <div class="pitch-line center-circle"></div>
+                <div class="pitch-line center-spot"></div>
+                <div class="pitch-line pen-box-left"></div>
+                <div class="pitch-line 6yd-box-left"></div>
+                <div class="pitch-line pen-box-right"></div>
+                <div class="pitch-line 6yd-box-right"></div>
+                
+                <!-- Notes -->
+                <div class="note" id="note-1" style="top: 0; left: 0;"><div class="note-header">NOTE</div><textarea class="note-content"></textarea></div>
+                <div class="note" id="note-2" style="top: 0; right: 0;"><div class="note-header">NOTE</div><textarea class="note-content"></textarea></div>
+                <div class="note" id="note-3" style="bottom: 0; left: 0;"><div class="note-header">NOTE</div><textarea class="note-content"></textarea></div>
+                <div class="note" id="note-4" style="bottom: 0; right: 0;"><div class="note-header">NOTE</div><textarea class="note-content"></textarea></div>
+
+                <!-- Players container (absolute positioning relative to pitch) -->
+                <div id="players-layer"></div>
+            </div>
+        </div>
+
+        <!-- Away Sidebar -->
+        <div class="sidebar" id="away-sidebar">
+            <div class="editable-team-name" contenteditable="true">AWAY TEAM</div>
+            
+            <div class="field-group"><label>Head Coach</label><input type="text"></div>
+            <div class="field-group"><label>Asst Coach</label><input type="text"></div>
+            <div class="field-group"><label>Physio</label><input type="text"></div>
+            
+            <div class="field-group"><label>Yellow Cards</label><div contenteditable="true"></div></div>
+            <div class="field-group"><label>Red Cards</label><div contenteditable="true"></div></div>
+            <div class="field-group"><label>Goalscorers</label><div contenteditable="true" class="goalscorers"></div></div>
+
+            <div class="color-pickers">
+                <label>Box <input type="color" id="away-box-color" value="#ff0000"></label>
+                <label>Text <input type="color" id="away-text-color" value="#ffffff"></label>
+                <label>GK Box <input type="color" id="away-gk-color" value="#00ff00"></label>
+            </div>
+
+            <div class="officials-section">
+                <b>Match Officials</b>
+                <div class="field-group"><label>REF</label><input type="text"></div>
+                <div class="field-group"><label>AR1</label><input type="text"></div>
+                <div class="field-group"><label>AR2</label><input type="text"></div>
+                <div class="field-group"><label>4TH</label><input type="text"></div>
+                <div class="field-group"><label>VAR</label><input type="text"></div>
+                <div class="field-group"><label>AVAR</label><input type="text"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Substitutes Area -->
+    <div class="subs-area">
+        <div class="subs-half" id="left-subs" data-team="Home"></div>
+        <div class="subs-half" id="right-subs" data-team="Away"></div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="import-modal" class="modal">
+        <div class="modal-content">
+            <h2>Import Squads</h2>
+            <p style="font-size: 0.9em; text-align: center; color: #555;">Paste 40 lines (20 Home, followed by 20 Away). Format: Number Name</p>
+            <textarea id="import-text" placeholder="1 Goalkeeper&#10;2 Right Back&#10;3 Left Back&#10;..."></textarea>
+            <div class="modal-buttons">
+                <button onclick="processImport()" style="background: #90ee90;">Process Import</button>
+                <button onclick="closeImportModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const pitch = document.getElementById('pitch');
+        const playersLayer = document.getElementById('players-layer');
+        let swapped = false;
+
+        // Base relative coordinates (x, y percentages) for left side (home initial)
+        // 4-3-3
+        const formationsLeft = {
+            '4-3-3': [
+                {x: 5, y: 50, gk: true}, // GK
+                {x: 15, y: 80}, {x: 15, y: 60}, {x: 15, y: 40}, {x: 15, y: 20}, // DEF
+                {x: 30, y: 70}, {x: 30, y: 50}, {x: 30, y: 30}, // MID
+                {x: 45, y: 75}, {x: 45, y: 50}, {x: 45, y: 25}  // FWD
+            ],
+            '4-4-2': [
+                {x: 5, y: 50, gk: true},
+                {x: 15, y: 80}, {x: 15, y: 60}, {x: 15, y: 40}, {x: 15, y: 20},
+                {x: 30, y: 80}, {x: 30, y: 60}, {x: 30, y: 40}, {x: 30, y: 20},
+                {x: 45, y: 60}, {x: 45, y: 40}
+            ],
+            '4-5-1': [
+                {x: 5, y: 50, gk: true},
+                {x: 15, y: 80}, {x: 15, y: 60}, {x: 15, y: 40}, {x: 15, y: 20},
+                {x: 30, y: 90}, {x: 30, y: 70}, {x: 30, y: 50}, {x: 30, y: 30}, {x: 30, y: 10},
+                {x: 45, y: 50}
+            ]
+        };
+
+        const players = [];
+
+        function createPlayer(team, id, isSub, gk) {
+            const el = document.createElement('div');
+            el.className = `player ${isSub ? 'off-pitch' : 'on-pitch'}`;
+            el.id = `player-${team}-${id}`;
+            
+            const numDiv = document.createElement('div');
+            numDiv.className = 'player-num';
+            numDiv.innerText = id;
+            
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'player-name';
+            nameDiv.innerText = `Player ${id}`;
+
+            const editDiv = document.createElement('div');
+            editDiv.className = 'player-edit';
+            editDiv.innerHTML = `
+                <input type="text" class="edit-num" value="${id}">
+                <input type="text" class="edit-name" value="Player ${id}">
+                <button type="button" class="save-btn">OK</button>
+            `;
+
+            el.appendChild(numDiv);
+            el.appendChild(nameDiv);
+            el.appendChild(editDiv);
+
+            // Double click to edit (or long press, simplifying to double click for now)
+            el.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                el.classList.add('editing');
+            });
+            
+            editDiv.querySelector('.save-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                numDiv.innerText = editDiv.querySelector('.edit-num').value;
+                nameDiv.innerText = editDiv.querySelector('.edit-name').value;
+                el.classList.remove('editing');
+            });
+            editDiv.addEventListener('pointerdown', e => e.stopPropagation()); // prevent drag while editing
+
+            playersLayer.appendChild(el);
+            
+            return {
+                el, team, id, isSub, gk,
+                x: 0, y: 0 // stored as percentages if on pitch
+            };
+        }
+
+        // Initialize Players (11 starters + 9 subs = 20 total per team)
+        for (let i = 1; i <= 20; i++) {
+            players.push(createPlayer('home', i, i > 11, i === 1));
+            players.push(createPlayer('away', i, i > 11, i === 1));
+        }
+
+        function updateColors() {
+            const hBox = document.getElementById('home-box-color').value;
+            const hTxt = document.getElementById('home-text-color').value;
+            const hGk = document.getElementById('home-gk-color').value;
+            const aBox = document.getElementById('away-box-color').value;
+            const aTxt = document.getElementById('away-text-color').value;
+            const aGk = document.getElementById('away-gk-color').value;
+
+            players.forEach(p => {
+                if (p.team === 'home') {
+                    p.el.style.backgroundColor = p.gk ? hGk : hBox;
+                    p.el.style.color = hTxt;
+                } else {
+                    p.el.style.backgroundColor = p.gk ? aGk : aBox;
+                    p.el.style.color = aTxt;
+                }
+            });
+        }
+
+        ['home', 'away'].forEach(team => {
+            ['box', 'text', 'gk'].forEach(type => {
+                document.getElementById(`${team}-${type}-color`).addEventListener('input', updateColors);
+            });
+        });
+
+        // Formation positioning
+        function getSideMultiplier(team) {
+            if (team === 'home' && !swapped) return 1;
+            if (team === 'away' && swapped) return 1;
+            return -1; // Right side
+        }
+
+        function calculatePosition(xPct, yPct, team) {
+            let mult = getSideMultiplier(team);
+            let finalX = mult === 1 ? xPct : 100 - xPct;
+            let finalY = mult === 1 ? yPct : 100 - yPct;
+            return {x: finalX, y: finalY};
+        }
+
+        function updateFormation(team, formName) {
+            const starters = players.filter(p => p.team === team && !p.isSub);
+            const formCoords = formationsLeft[formName];
+            
+            starters.forEach((p, idx) => {
+                if(formCoords[idx]) {
+                    const pos = calculatePosition(formCoords[idx].x, formCoords[idx].y, team);
+                    p.x = pos.x;
+                    p.y = pos.y;
+                    p.el.style.left = `${pos.x}%`;
+                    p.el.style.top = `${pos.y}%`;
+                    p.el.style.position = 'absolute';
+                }
+            });
+        }
+
+        // Initial setup
+        function initLayout() {
+            updateFormation('home', '4-3-3');
+            updateFormation('away', '4-3-3');
+            updateColors();
+            renderSubs();
+        }
+
+        function renderSubs() {
+            const leftSubs = document.getElementById('left-subs');
+            const rightSubs = document.getElementById('right-subs');
+            
+            players.filter(p => p.isSub).forEach(p => {
+                p.el.style.position = 'relative';
+                p.el.style.left = '0';
+                p.el.style.top = '0';
+                p.el.style.transform = 'none'; // reset transform for flex grid
+                
+                if (swapped) {
+                    if (p.team === 'home') rightSubs.appendChild(p.el);
+                    else leftSubs.appendChild(p.el);
+                } else {
+                    if (p.team === 'home') leftSubs.appendChild(p.el);
+                    else rightSubs.appendChild(p.el);
+                }
+            });
+        }
+
+        window.swapEnds = function() {
+            swapped = !swapped;
+            
+            // Swap text labels
+            document.getElementById('left-subs').setAttribute('data-team', swapped ? 'Away' : 'Home');
+            document.getElementById('right-subs').setAttribute('data-team', swapped ? 'Home' : 'Away');
+
+            // 180-degree positional swap (swap both X and Y)
+            // keeping text fully upright
+            players.filter(p => !p.isSub).forEach(p => {
+                p.x = 100 - p.x;
+                p.y = 100 - p.y;
+                p.el.style.left = `${p.x}%`;
+                p.el.style.top = `${p.y}%`;
+            });
+
+            renderSubs();
+        };
+
+        let draggedEl = null;
+        let offsetX = 0, offsetY = 0;
+        let pitchRect = null;
+
+        function startDrag(e, el) {
+            if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'textarea' || el.classList.contains('editing')) return;
+            
+            draggedEl = el;
+            const rect = el.getBoundingClientRect();
+            
+            // If dragging from subs, move it to players layer and position absolute
+            if(el.parentElement !== playersLayer) {
+                 playersLayer.appendChild(el);
+                 el.style.position = 'absolute';
+                 el.style.transform = 'translate(-50%, -50%)'; // re-apply centering
+                 // Initial temporary position under cursor
+                 pitchRect = pitch.getBoundingClientRect();
+                 el.style.left = `${((e.clientX - pitchRect.left) / pitchRect.width) * 100}%`;
+                 el.style.top = `${((e.clientY - pitchRect.top) / pitchRect.height) * 100}%`;
+                 
+                 // Mark as on-pitch
+                 let pData = players.find(p => p.el === el);
+                 if(pData) {
+                     pData.isSub = false;
+                     el.classList.remove('off-pitch');
+                     el.classList.add('on-pitch');
+                 }
+            }
+
+            pitchRect = pitch.getBoundingClientRect();
+            // Calculate center offset
+            const elRect = el.getBoundingClientRect();
+            const elCenterX = elRect.left + elRect.width / 2;
+            const elCenterY = elRect.top + elRect.height / 2;
+            offsetX = e.clientX - elCenterX;
+            offsetY = e.clientY - elCenterY;
+            
+            el.setPointerCapture(e.pointerId);
+        }
+
+        function doDrag(e) {
+            if (!draggedEl) return;
+            e.preventDefault();
+            
+            let newX = e.clientX - offsetX;
+            let newY = e.clientY - offsetY;
+
+            // Constrain to pitch area roughly
+            if (pitchRect) {
+                let xPct = ((newX - pitchRect.left) / pitchRect.width) * 100;
+                let yPct = ((newY - pitchRect.top) / pitchRect.height) * 100;
+                
+                // Allow dragging slightly outside to drop into subs
+                draggedEl.style.left = `${xPct}%`;
+                draggedEl.style.top = `${yPct}%`;
+            }
+        }
+
+        function endDrag(e) {
+            if (!draggedEl) return;
+            draggedEl.releasePointerCapture(e.pointerId);
+            
+            // Check if dropped in subs area
+            const subsRect = document.querySelector('.subs-area').getBoundingClientRect();
+            if (e.clientY > subsRect.top && draggedEl.classList.contains('player')) {
+                let pData = players.find(p => p.el === draggedEl);
+                if (pData) {
+                    pData.isSub = true;
+                    draggedEl.classList.add('off-pitch');
+                    draggedEl.classList.remove('on-pitch');
+                    renderSubs(); // puts it back in the flex grid
+                }
+            } else {
+                // Save pct coords if it's a player
+                let pData = players.find(p => p.el === draggedEl);
+                if (pData) {
+                    pData.x = parseFloat(draggedEl.style.left);
+                    pData.y = parseFloat(draggedEl.style.top);
+                }
+            }
+
+            draggedEl = null;
+        }
+
+        // Attach listeners to pitch for global movement
+        window.addEventListener('pointermove', doDrag);
+        window.addEventListener('pointerup', endDrag); // Window catches drops outside
+
+        // Attach listeners to draggable elements
+        players.forEach(p => {
+            p.el.addEventListener('pointerdown', (e) => startDrag(e, p.el));
+        });
+
+        document.querySelectorAll('.note').forEach(note => {
+            note.addEventListener('pointerdown', (e) => startDrag(e, note));
+        });
+
+        /* Import Functionality */
+        function openImportModal() {
+            document.getElementById('import-modal').classList.add('open');
+            document.getElementById('import-text').value = ''; // clear previous
+        }
+
+        function closeImportModal() {
+            document.getElementById('import-modal').classList.remove('open');
+        }
+
+        function processImport() {
+            const text = document.getElementById('import-text').value;
+            // Split by line and filter out empty lines
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            
+            if (lines.length === 0) return;
+
+            let homePlayers = players.filter(p => p.team === 'home');
+            let awayPlayers = players.filter(p => p.team === 'away');
+
+            let homeIndex = 0;
+            let awayIndex = 0;
+
+            lines.forEach((line, index) => {
+                const firstSpace = line.indexOf(' ');
+                if (firstSpace === -1) return; // skip if no space found
+                
+                const num = line.substring(0, firstSpace).trim();
+                const name = line.substring(firstSpace + 1).trim();
+
+                let targetPlayer = null;
+                if (index < 20 && homeIndex < homePlayers.length) {
+                    targetPlayer = homePlayers[homeIndex];
+                    homeIndex++;
+                } else if (index >= 20 && awayIndex < awayPlayers.length) {
+                    targetPlayer = awayPlayers[awayIndex];
+                    awayIndex++;
+                }
+
+                if (targetPlayer) {
+                    targetPlayer.el.querySelector('.player-num').innerText = num;
+                    targetPlayer.el.querySelector('.player-name').innerText = name;
+                    targetPlayer.el.querySelector('.edit-num').value = num;
+                    targetPlayer.el.querySelector('.edit-name').value = name;
+                    
+                    if ((index < 20 && homeIndex === 1) || (index >= 20 && awayIndex === 1)) {
+                        targetPlayer.gk = true;
+                    } else {
+                        targetPlayer.gk = false;
+                    }
+                }
+            });
+
+            updateColors(); // Apply colors to ensure GK backgrounds update
+            closeImportModal();
+        }
+
+        function copyTemplate() {
+            const textToCopy = document.getElementById('template-text').innerText;
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = textToCopy;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            try {
+                document.execCommand('copy');
+                const btn = document.getElementById('copy-template-btn');
+                btn.innerText = 'Copied!';
+                setTimeout(() => {
+                    btn.innerText = 'Copy Template';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text', err);
+            }
+            document.body.removeChild(tempTextArea);
+        }
+
+        // Initialize
+        initLayout();
+
+    </script>
+</body>
+</html>
